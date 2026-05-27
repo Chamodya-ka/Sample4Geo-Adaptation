@@ -43,7 +43,7 @@ class Configuration:
     sim_sample: bool = True        # use similarity sampling
     neighbour_select: int = 64     # max selection size from pool
     neighbour_range: int = 128     # pool size for selection
-    gps_dict_path: str = "./data/CVUSA/gps_dict.pkl"   # path to pre-computed distances
+    gps_dict_path: str = "data/CVUSA/gps_dict.pkl"   # path to pre-computed distances
  
     # Eval
     batch_size_eval: int = 128
@@ -65,7 +65,7 @@ class Configuration:
     lr_end: float = 0.0001             #  only for "polynomial"
     
     # Dataset
-    data_folder = "./data/CVUSA"     
+    data_folder = "/home/71/25021871/data/data/cvusa/CVPR_subset"     
     
     # Augment Images
     prob_rotate: float = 0.75          # rotates the sat image and ground images simultaneously
@@ -173,7 +173,7 @@ if __name__ == '__main__':
     sat_transforms_train, ground_transforms_train = get_transforms_train(image_size_sat,
                                                                    img_size_ground,
                                                                    mean=mean,
-                                                                   std=std,
+                                                                   std=std
                                                                    )
                                                                    
                                                                    
@@ -183,7 +183,10 @@ if __name__ == '__main__':
                                       transforms_reference=sat_transforms_train,
                                       prob_flip=config.prob_flip,
                                       prob_rotate=config.prob_rotate,
-                                      shuffle_batch_size=config.batch_size
+                                      shuffle_batch_size=config.batch_size,
+                                      fov_90=True,
+                                      fov_phase_seed=1,
+                                      epoch=0
                                       )
     
     
@@ -207,6 +210,8 @@ if __name__ == '__main__':
                                               split="test",
                                               img_type="reference",
                                               transforms=sat_transforms_val,
+                                              fov_90=True,
+                                              epoch=0
                                               )
     
     reference_dataloader_test = DataLoader(reference_dataset_test,
@@ -222,6 +227,7 @@ if __name__ == '__main__':
                                           split="test",
                                           img_type="query",    
                                           transforms=ground_transforms_val,
+                                          fov_90=True
                                           )
     
     query_dataloader_test = DataLoader(query_dataset_test,
@@ -250,11 +256,19 @@ if __name__ == '__main__':
     
     if config.sim_sample:
     
-        # Query Ground Images Train for simsampling
+        # Query Ground Images Train for simsampling.
+        # fov_phase_seed enables deterministic per-image 90-degree FoV crops so
+        # the similarity rankings are computed on a consistent crop of each
+        # panorama.  The seed is updated to the current epoch before every
+        # calc_sim call, which rotates crop positions across training phases
+        # without re-creating the dataset.
         query_dataset_train = CVUSADatasetEval(data_folder=config.data_folder ,
                                                split="train",
                                                img_type="query",   
                                                transforms=ground_transforms_val,
+                                               fov_phase_seed=0,
+                                               fov_90=True,
+                                               epoch=0
                                                )
             
         query_dataloader_train = DataLoader(query_dataset_train,
@@ -268,6 +282,7 @@ if __name__ == '__main__':
                                                    split="train",
                                                    img_type="reference", 
                                                    transforms=sat_transforms_val,
+                                                   epoch=0
                                                    )
         
         reference_dataloader_train = DataLoader(reference_dataset_train,
@@ -390,6 +405,11 @@ if __name__ == '__main__':
     
 
     for epoch in range(1, config.epochs+1):
+        train_dataset.set_epoch(epoch) # for debugging, to save images with epoch number
+        reference_dataset_test.set_epoch(epoch) # for debugging, to save images with epoch number
+        query_dataset_test.set_epoch(epoch) # for debugging, to save images with epoch number
+        query_dataset_train.set_epoch(epoch) # for debugging, to save images with epoch number
+        reference_dataset_train.set_epoch(epoch) # for debugging, to save images with epoch number
         
         print("\n{}[Epoch: {}]{}".format(30*"-", epoch, 30*"-"))
         
@@ -408,7 +428,7 @@ if __name__ == '__main__':
         
         # evaluate
         if (epoch % config.eval_every_n_epoch == 0 and epoch != 0) or epoch == config.epochs:
-        
+            
             print("\n{}[{}]{}".format(30*"-", "Evaluate", 30*"-"))
         
             r1_test = evaluate(config=config,
@@ -420,6 +440,8 @@ if __name__ == '__main__':
                                cleanup=True)
             
             if config.sim_sample:
+                # train_dataset.set_fov_phase_seed(epoch)
+                # query_dataset_train.set_fov_phase_seed(epoch)
                 r1_train, sim_dict = calc_sim(config=config,
                                               model=model,
                                               reference_dataloader=reference_dataloader_train,

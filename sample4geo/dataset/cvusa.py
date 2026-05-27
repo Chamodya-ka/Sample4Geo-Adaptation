@@ -17,6 +17,8 @@ class CVUSADatasetTrain(Dataset):
                  prob_flip=0.0,
                  prob_rotate=0.0,
                  shuffle_batch_size=128,
+                 fov_phase_seed=1,
+                 fov_90=False,
                  ):
         
         super().__init__()
@@ -25,11 +27,10 @@ class CVUSADatasetTrain(Dataset):
         self.prob_flip = prob_flip
         self.prob_rotate = prob_rotate
         self.shuffle_batch_size = shuffle_batch_size
-        
         self.transforms_query = transforms_query           # ground
         self.transforms_reference = transforms_reference   # satellite
         
-        self.df = pd.read_csv(f'{data_folder}/splits/train-19zl.csv', header=None)
+        self.df = pd.read_csv(f'{data_folder}/splits/train-19zl.csv', header=None, nrows=20)
         
         self.df = self.df.rename(columns={0: "sat", 1: "ground", 2: "ground_anno"})
         
@@ -40,7 +41,8 @@ class CVUSADatasetTrain(Dataset):
         self.idx2ground = dict(zip(self.df.idx, self.df.ground))
    
         self.pairs = list(zip(self.df.idx, self.df.sat, self.df.ground))
-        
+        self.fov_90 = fov_90
+        self.fov_phase_seed = fov_phase_seed
         self.idx2pair = dict()
         train_ids_list = list()
         
@@ -52,10 +54,17 @@ class CVUSADatasetTrain(Dataset):
             
         self.train_ids = train_ids_list
         self.samples = copy.deepcopy(self.train_ids)
-            
+
+    # def set_fov_phase_seed(self, seed: int):
+    #     """Update the crop seed before each similarity-sampling pass."""
+    #     self.fov_phase_seed = int(seed)
+    def set_epoch(self, epoch: int):
+        """Update the epoch for debugging."""
+        self.fov_phase_seed = int(epoch)
+
 
     def __getitem__(self, index):
-        
+
         idx, sat, ground = self.idx2pair[self.samples[index]]
         
         # load query -> ground image
@@ -66,12 +75,28 @@ class CVUSADatasetTrain(Dataset):
         reference_img = cv2.imread(f'{self.data_folder}/{sat}')
         reference_img = cv2.cvtColor(reference_img, cv2.COLOR_BGR2RGB)
 
-            
-        # Flip simultaneously query and reference
-        if np.random.random() < self.prob_flip:
+        # Deterministic 90-degree FoV crop.
+        # Must happen BEFORE the flip so that the crop region on the original
+        # panorama is identical to what CVUSADatasetEval produces for the same
+        # idx and fov_phase_seed.  Flipping after the crop is fine for
+        # augmentation – it just mirrors the already-cropped patch.
+        if self.fov_90 and self.fov_phase_seed is not None:
+            h, w = query_img.shape[:2]
+            crop_w = w // 4  # 90 / 360 = 0.25
+            rng = np.random.default_rng(self.fov_phase_seed * 100003 + idx)
+            start = int(rng.integers(0, w - crop_w + 1))
+            query_img = query_img[:, start:start + crop_w, :]
+            # print(f"[TRAIN]  idx={idx:6d}  fov_phase_seed={self.fov_phase_seed}  start={start}")
+
+        # Flip simultaneously query and reference (after crop so the crop
+        # region is consistent with eval / sim-sampling).
+        # +1 offset keeps this rng independent from the crop rng (same base seed
+        # would produce correlated draws).
+        flip_rng = np.random.default_rng(self.fov_phase_seed * 100003 + idx + 1)
+        if float(flip_rng.random()) < self.prob_flip:
             query_img = cv2.flip(query_img, 1)
-            reference_img = cv2.flip(reference_img, 1) 
-        
+            reference_img = cv2.flip(reference_img, 1)
+
         # image transforms
         if self.transforms_query is not None:
             query_img = self.transforms_query(image=query_img)['image']
@@ -170,7 +195,9 @@ class CVUSADatasetTrain(Dataset):
                                     break
                                 
                                 # check if idx not already in batch or epoch
-                                if idx_near not in idx_batch and idx_near not in idx_epoch and idx_near:
+                                # also guard against neighbours from sim_dict that are
+                                # outside the loaded subset (e.g. during debug runs with nrows)
+                                if idx_near not in idx_batch and idx_near not in idx_epoch and idx_near and idx_near in self.idx2pair:
                             
                                     idx_batch.add(idx_near)
                                     current_batch.append(idx_near)
@@ -218,6 +245,9 @@ class CVUSADatasetEval(Dataset):
                  split,
                  img_type,
                  transforms=None,
+                 fov_90=False,
+                 fov_phase_seed=0,
+                 epoch=0,# just for debugging
                  ):
         
         super().__init__()
@@ -226,11 +256,18 @@ class CVUSADatasetEval(Dataset):
         self.split = split
         self.img_type = img_type
         self.transforms = transforms
-        
+        # fov_phase_seed: when set to an int, applies a deterministic per-image
+        # 90-degree horizontal crop in __getitem__ (worker-safe, no global state).
+        # Call set_fov_phase_seed(epoch) before each calc_sim run to rotate the
+        # crop positions while keeping them consistent across the whole dataset.
+        self.fov_phase_seed = fov_phase_seed
         if split == 'train':
-            self.df = pd.read_csv(f'{data_folder}/splits/train-19zl.csv', header=None)
+            self.df = pd.read_csv(f'{data_folder}/splits/train-19zl.csv', header=None, nrows=20)
         else:
-            self.df = pd.read_csv(f'{data_folder}/splits/val-19zl.csv', header=None)
+            if fov_90:
+                self.df = pd.read_csv(f'{data_folder}/splits/val-19zl-cropped.csv', header=None, nrows=20)
+            else:
+                self.df = pd.read_csv(f'{data_folder}/splits/val-19zl.csv', header=None, nrows=20)
         
         self.df = self.df.rename(columns={0:"sat", 1:"ground", 2:"ground_anno"})
         
@@ -249,13 +286,31 @@ class CVUSADatasetEval(Dataset):
             self.label = self.df.idx.values 
         else:
             raise ValueError("Invalid 'img_type' parameter. 'img_type' must be 'query' or 'reference'")
-                
+    
+    def set_epoch(self, epoch: int):
+        """Update the epoch for debugging."""
+        self.fov_phase_seed = int(epoch)
+
+    # def set_fov_phase_seed(self, seed: int):
+    #     """Update the crop seed before each similarity-sampling pass."""
+        
 
     def __getitem__(self, index):
         
         img = cv2.imread(f'{self.data_folder}/{self.images[index]}')
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        
+
+        # Deterministic 90-degree FoV crop for similarity sampling.
+        # Uses per-index seeding so behaviour is identical across all DataLoader
+        # workers without touching the global random state.
+        if self.split == "train" and self.img_type == "query" and self.fov_phase_seed is not None:
+            h, w = img.shape[:2]
+            crop_w = w // 4  # 90 / 360 = 0.25
+            rng = np.random.default_rng(self.fov_phase_seed * 100003 + int(self.label[index]))
+            start = int(rng.integers(0, w - crop_w + 1))
+            img = img[:, start:start + crop_w, :]
+            # print(f"[EVAL ]  idx={int(self.label[index]):6d}  fov_phase_seed={self.fov_phase_seed}  start={start}")
+
         # image transforms
         if self.transforms is not None:
             img = self.transforms(image=img)['image']

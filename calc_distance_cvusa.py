@@ -5,7 +5,7 @@ import pickle
 
 TOP_K = 128
 
-df_train = pd.read_csv('./data/CVUSA/splits/train-19zl.csv', header=None)
+df_train = pd.read_csv('/home/71/25021871/data/data/cvusa/CVPR_subset/splits/train-19zl.csv', header=None)
 
 df_train = df_train.rename(columns={0: "sat", 1: "ground", 2: "ground_anno"})
 
@@ -17,7 +17,7 @@ train_sat_ids = df_train["idx"].values
 print("Length Train Ids:", len(train_sat_ids))
 
 
-df_gps = pd.read_csv('./data/CVUSA/split_locations/all.csv', header=None)
+df_gps = pd.read_csv('/home/71/25021871/data/data/cvusa/CVPR_subset/split/all.csv', header=None)
 
 df_gps = df_gps.rename(columns={0: "sat_lat", 1: "sat_long", 2: "ground_lat", 3: "ground_long", 4: "i_dont_know"})
 
