@@ -30,7 +30,7 @@ class CVUSADatasetTrain(Dataset):
         self.transforms_query = transforms_query           # ground
         self.transforms_reference = transforms_reference   # satellite
         
-        self.df = pd.read_csv(f'{data_folder}/splits/train-19zl.csv', header=None, nrows=20)
+        self.df = pd.read_csv(f'{data_folder}/splits/train-19zl.csv', header=None)
         
         self.df = self.df.rename(columns={0: "sat", 1: "ground", 2: "ground_anno"})
         
@@ -120,6 +120,20 @@ class CVUSADatasetTrain(Dataset):
             
         label = torch.tensor(idx, dtype=torch.long)  
         
+        # denormalize and save samples to visualize 
+        mean=[0.485, 0.456, 0.406]
+        std=[0.229, 0.224, 0.225]
+
+        inv_mean = torch.tensor(mean).view(3, 1, 1)
+        inv_std = torch.tensor(std).view(3, 1, 1)
+
+        unnormalized_query = (query_img * inv_std) + inv_mean
+        unnormalized_reference = (reference_img * inv_std) + inv_mean
+
+        if index < 10:
+            cv2.imwrite(f"./debug/{index}_train_query.jpg", cv2.cvtColor(unnormalized_query.permute(1, 2, 0).numpy() * 255, cv2.COLOR_RGB2BGR))
+            cv2.imwrite(f"./debug/{index}_train_reference.jpg", cv2.cvtColor(unnormalized_reference.permute(1, 2, 0).numpy() * 255, cv2.COLOR_RGB2BGR)) 
+
         return query_img, reference_img, label
     
     def __len__(self):
@@ -262,12 +276,12 @@ class CVUSADatasetEval(Dataset):
         # crop positions while keeping them consistent across the whole dataset.
         self.fov_phase_seed = fov_phase_seed
         if split == 'train':
-            self.df = pd.read_csv(f'{data_folder}/splits/train-19zl.csv', header=None, nrows=20)
+            self.df = pd.read_csv(f'{data_folder}/splits/train-19zl.csv', header=None)
         else:
             if fov_90:
-                self.df = pd.read_csv(f'{data_folder}/splits/val-19zl-cropped.csv', header=None, nrows=20)
+                self.df = pd.read_csv(f'{data_folder}/splits/val-19zl-cropped.csv', header=None)
             else:
-                self.df = pd.read_csv(f'{data_folder}/splits/val-19zl.csv', header=None, nrows=20)
+                self.df = pd.read_csv(f'{data_folder}/splits/val-19zl.csv', header=None)
         
         self.df = self.df.rename(columns={0:"sat", 1:"ground", 2:"ground_anno"})
         
@@ -310,7 +324,9 @@ class CVUSADatasetEval(Dataset):
             start = int(rng.integers(0, w - crop_w + 1))
             img = img[:, start:start + crop_w, :]
             # print(f"[EVAL ]  idx={int(self.label[index]):6d}  fov_phase_seed={self.fov_phase_seed}  start={start}")
-
+        # if self.img_type == "query":
+        #     print("print before save query")
+        #     cv2.imwrite(f"./debug/{index}_{self.split}_{self.img_type}.jpg",img)
         # image transforms
         if self.transforms is not None:
             img = self.transforms(image=img)['image']

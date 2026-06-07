@@ -25,10 +25,10 @@ class Configuration:
     normalize_features: bool = True
     
     # Dataset
-    data_folder = "./data/CVUSA"     
+    data_folder = "/home/71/25021871/data/data/cvusa/CVPR_subset"     
     
     # Checkpoint to start from
-    checkpoint_start = 'pretrained/cvusa/convnext_base.fb_in22k_ft_in1k_384/weights_e40_98.6830.pth'   
+    checkpoint_start = 'cvusa/convnext_base.fb_in22k_ft_in1k_384/221130/weights_e40_53.6751.pth'   
   
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
@@ -65,8 +65,8 @@ if __name__ == '__main__':
     
     image_size_sat = (img_size, img_size)
     
-    new_width = config.img_size * 2    
-    new_hight = round((224 / 1232) * new_width)
+    new_width = config.img_size    
+    new_hight = config.img_size #round((224 / 1232) * new_width)
     img_size_ground = (new_hight, new_width)
      
     # load pretrained Checkpoint    
@@ -107,6 +107,7 @@ if __name__ == '__main__':
                                               split="test",
                                               img_type="reference",
                                               transforms=sat_transforms_val,
+                                              fov_90=True
                                               )
     
     reference_dataloader_test = DataLoader(reference_dataset_test,
@@ -122,6 +123,7 @@ if __name__ == '__main__':
                                           split="test",
                                           img_type="query",    
                                           transforms=ground_transforms_val,
+                                          fov_90=True
                                           )
     
     query_dataloader_test = DataLoader(query_dataset_test,

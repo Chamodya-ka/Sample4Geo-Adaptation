@@ -53,7 +53,7 @@ class Configuration:
     # Optimizer 
     clip_grad = 100.                   # None | float
     decay_exclue_bias: bool = False
-    grad_checkpointing: bool = False   # Gradient Checkpointing
+    grad_checkpointing: bool = True   # Gradient Checkpointing
     
     # Loss
     label_smoothing: float = 0.1
@@ -72,13 +72,13 @@ class Configuration:
     prob_flip: float = 0.5             # flipping the sat image and ground images simultaneously
     
     # Savepath for model checkpoints
-    model_path: str = "./cvusa"
+    model_path: str = "cvusa/new_fov_90"
     
     # Eval before training
     zero_shot: bool = False 
     
     # Checkpoint to start from
-    checkpoint_start = None   
+    checkpoint_start = None #"cvusa/convnext_base.fb_in22k_ft_in1k_384/weights_e40_98.6830.pth"   
   
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
@@ -137,8 +137,8 @@ if __name__ == '__main__':
     
     image_size_sat = (img_size, img_size)
     
-    new_width = config.img_size * 2    
-    new_hight = round((224 / 1232) * new_width)
+    new_width = config.img_size   
+    new_hight = config.img_size # round((224 / 1232) * new_width)
     img_size_ground = (new_hight, new_width)
     
     # Activate gradient checkpointing
@@ -186,7 +186,6 @@ if __name__ == '__main__':
                                       shuffle_batch_size=config.batch_size,
                                       fov_90=True,
                                       fov_phase_seed=1,
-                                      epoch=0
                                       )
     
     

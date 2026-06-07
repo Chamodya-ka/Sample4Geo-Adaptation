@@ -63,19 +63,20 @@ def train(train_config, model, dataloader, loss_function, optimizer, scheduler=N
                 scheduler.step()
    
         else:
-        
-            # data (batches) to device   
-            query = query.to(train_config.device)
-            reference = reference.to(train_config.device)
+            # bfloat no scaler
+            with torch.amp.autocast(device_type=torch.device(train_config.device).type, dtype=torch.bfloat16):
+                # data (batches) to device   
+                query = query.to(train_config.device)
+                reference = reference.to(train_config.device)
 
-            # Forward pass
-            features1, features2 = model(query, reference)
-            if torch.cuda.device_count() > 1 and len(train_config.gpu_ids) > 1: 
-                loss = loss_function(features1, features2, model.module.logit_scale.exp())
-            else:
-                loss = loss_function(features1, features2, model.logit_scale.exp()) 
-            losses.update(loss.item())
-
+                # Forward pass
+                features1, features2 = model(query, reference)
+                if torch.cuda.device_count() > 1 and len(train_config.gpu_ids) > 1: 
+                    loss = loss_function(features1, features2, model.module.logit_scale.exp())
+                else:
+                    loss = loss_function(features1, features2, model.logit_scale.exp()) 
+                losses.update(loss.item())
+            loss = loss.float()
             # Calculate gradient using backward pass
             loss.backward()
             
@@ -91,7 +92,7 @@ def train(train_config, model, dataloader, loss_function, optimizer, scheduler=N
             # Scheduler
             if train_config.scheduler == "polynomial" or train_config.scheduler == "cosine" or train_config.scheduler ==  "constant":
                 scheduler.step()
-        
+            
         
         
         if train_config.verbose:
@@ -131,7 +132,7 @@ def predict(train_config, model, dataloader):
         
             ids_list.append(ids)
             
-            with autocast():
+            with torch.amp.autocast(device_type=torch.device(train_config.device).type, dtype=torch.bfloat16):
          
                 img = img.to(train_config.device)
                 img_feature = model(img)
