@@ -3,6 +3,7 @@ import time
 import math
 import shutil
 import sys
+from sample4geo.adapted_model import AdaptedTimmModel
 import torch
 import pickle
 from dataclasses import dataclass
@@ -150,7 +151,8 @@ if __name__ == '__main__':
         print("Start from:", config.checkpoint_start)
         model_state_dict = torch.load(config.checkpoint_start)  
         model.load_state_dict(model_state_dict, strict=False)     
-
+    print("Adding adapter module...")  
+    model = AdaptedTimmModel(model, freeze_base=False)
     # Data parallel
     print("GPUs available:", torch.cuda.device_count())  
     if torch.cuda.device_count() > 1 and len(config.gpu_ids) > 1:
