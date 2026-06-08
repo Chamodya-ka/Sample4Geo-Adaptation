@@ -5,11 +5,17 @@ from .utils import AverageMeter
 from torch.cuda.amp import autocast
 import torch.nn.functional as F
 
-def train(train_config, model, dataloader, loss_function, optimizer, scheduler=None, scaler=None):
+def train_adapted(train_config, model, dataloader, loss_function, optimizer, scheduler=None, scaler=None):
 
     # set model train mode
     model.train()
-    
+    if train_config.train_adapter_only:
+        for param in model.parameters():
+            param.requires_grad = True
+        #freeze base model parameters
+        for param in model.base_model.parameters():
+            param.requires_grad = False
+
     losses = AverageMeter()
     
     # wait before starting progress bar
@@ -127,7 +133,7 @@ def train(train_config, model, dataloader, loss_function, optimizer, scheduler=N
     return losses.avg
 
 
-def predict(train_config, model, dataloader):
+def predict(train_config, model, dataloader, query_features_stage3=None):
     
     model.eval()
     
@@ -140,25 +146,34 @@ def predict(train_config, model, dataloader):
         bar = dataloader
         
     img_features_list = []
-    
+    query_features_stage3_list = []
     ids_list = []
     with torch.no_grad():
-        
-        for img, ids in bar:
-        
-            ids_list.append(ids)
-            
-            with torch.amp.autocast(device_type=torch.device(train_config.device).type, dtype=torch.bfloat16):
-         
-                img = img.to(train_config.device)
-                img_feature = model(img)
-            
-                # normalize is calculated in fp32
-                if train_config.normalize_features:
-                    img_feature = F.normalize(img_feature, dim=-1)
-            
-            # save features in fp32 for sim calculation
-            img_features_list.append(img_feature.to(torch.float32))
+        if query_features_stage3 is not None:
+            # query_features_stage3 = query_features_stage3.to(train_config.device)
+            for data, query_feat in zip(bar, query_features_stage3):
+                img, ids = data
+                ids_list.append(ids)
+                with torch.amp.autocast(device_type=torch.device(train_config.device).type, dtype=torch.bfloat16):
+                    img = img.to(train_config.device)
+                    query_feat = query_feat.to(train_config.device)
+                    img_feature, _ = model(aerial_img=img, query_features=query_feat)
+                    if train_config.normalize_features:
+                        img_feature = F.normalize(img_feature, dim=-1)
+                img_features_list.append(img_feature.to(torch.float32))
+        else:
+            for img, ids in bar:
+                ids_list.append(ids)
+                with torch.amp.autocast(device_type=torch.device(train_config.device).type, dtype=torch.bfloat16):
+                    img = img.to(train_config.device)
+                    # we are calculating query features
+                    img_feature, query_features_stage3_ = model(grd_img=img)
+                    query_features_stage3_list.append(query_features_stage3_)
+                    # normalize is calculated in fp32
+                    if train_config.normalize_features:
+                        img_feature = F.normalize(img_feature, dim=-1)
+                # save features in fp32 for sim calculation
+                img_features_list.append(img_feature.to(torch.float32))
       
         # keep Features on GPU
         img_features = torch.cat(img_features_list, dim=0) 
