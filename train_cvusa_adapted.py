@@ -14,8 +14,8 @@ from transformers import get_constant_schedule_with_warmup, get_polynomial_decay
 from sample4geo.dataset.cvusa import CVUSADatasetEval, CVUSADatasetTrain
 from sample4geo.transforms import get_transforms_train, get_transforms_val
 from sample4geo.utils import setup_system, Logger
-from sample4geo.trainer import train
-from sample4geo.evaluate.cvusa_and_cvact import evaluate, calc_sim
+from sample4geo.trainer_adapted import train_adapted
+from sample4geo.evaluate.cvusa_and_cvact_adapted import evaluate, calc_sim
 from sample4geo.loss import InfoNCE
 from sample4geo.model import TimmModel
 
@@ -25,7 +25,8 @@ class Configuration:
     
     # Model
     model: str = 'convnext_base.fb_in22k_ft_in1k_384' 
-    
+    using_adapter: bool = True  # if True, the adapter module will be added to the model, otherwise the original model will be used
+    train_adapter_only: bool = False  # if True, only the adapter module will be trained, otherwise the whole model will be trained
     # Override model image size
     img_size: int = 384
     
@@ -48,7 +49,7 @@ class Configuration:
  
     # Eval
     batch_size_eval: int = 128
-    eval_every_n_epoch: int = 4        # eval every n Epoch
+    eval_every_n_epoch: int = 1        # eval every n Epoch
     normalize_features: bool = True
 
     # Optimizer 
@@ -60,10 +61,10 @@ class Configuration:
     label_smoothing: float = 0.1
     
     # Learning Rate
-    lr: float = 0.001                  # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
-    scheduler: str = "cosine"          # "polynomial" | "cosine" | "constant" | None
-    warmup_epochs: int = 1
-    lr_end: float = 0.0001             #  only for "polynomial"
+    lr: float = 0.0005                  # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
+    scheduler: str = "constant"#"cosine"          # "polynomial" | "cosine" | "constant" | None
+    warmup_epochs: int = 0
+    lr_end: float = 0.00005             #  only for "polynomial"
     
     # Dataset
     data_folder = "/home/71/25021871/data/data/cvusa/CVPR_subset"     
@@ -415,7 +416,7 @@ if __name__ == '__main__':
         print("\n{}[Epoch: {}]{}".format(30*"-", epoch, 30*"-"))
         
 
-        train_loss = train(config,
+        train_loss = train_adapted(config,
                            model,
                            dataloader=train_dataloader,
                            loss_function=loss_function,

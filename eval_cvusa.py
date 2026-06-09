@@ -28,7 +28,7 @@ class Configuration:
     data_folder = "/home/71/25021871/data/data/cvusa/CVPR_subset"     
     
     # Checkpoint to start from
-    checkpoint_start = 'cvusa/convnext_base.fb_in22k_ft_in1k_384/221130/weights_e40_53.6751.pth'   
+    checkpoint_start = 'cvusa/convnext_base.fb_in22k_ft_in1k_384/weights_e40_98.6830.pth'   
   
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 

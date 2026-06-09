@@ -36,19 +36,19 @@ def train(train_config, model, dataloader, loss_function, optimizer, scheduler=N
                 reference = reference.to(train_config.device)
             
                 # Forward pass
-                features1, features2, stage3_features1, stage3_features2 = model(grd_img=query, aerial_img=reference)
+                features1, features2 = model(query, reference)
                 #stage3_features1 = stage3_features1.reshape(train_config.batch_size,-1, 1024)
                 #stage3_features2 = stage3_features2.reshape(train_config.batch_size,-1, 1024)
                 # Adding OT module
                 # print(ot_features1.shape, features2.shape)
                 if torch.cuda.device_count() > 1 and len(train_config.gpu_ids) > 1: 
                     # weighted_aerial_features = low_fow_adapter_transformer(stage3_features1, stage3_features2)
-                    infoNCE_loss = loss_function(features1, features2, model.base_model.logit_scale.exp())
+                    infoNCE_loss = loss_function(features1, features2, model.logit_scale.exp())
                     #ot_loss, _ = cvft_module(stage3_features1, stage3_features2, torch.eye(features1.size(0)).to(train_config.device))
                     
                 else:
                     # weighted_aerial_features = low_fow_adapter_transformer(stage3_features1, stage3_features2)
-                    infoNCE_loss = loss_function(features1, features2, model.base_model.logit_scale.exp()) 
+                    infoNCE_loss = loss_function(features1, features2, model.logit_scale.exp()) 
                     #ot_loss, _ = cvft_module(stage3_features1, stage3_features2, torch.eye(features1.size(0)).to(train_config.device))
                 total_loss = infoNCE_loss # + alpha * ot_loss
                 # if c%25==0:
@@ -82,14 +82,14 @@ def train(train_config, model, dataloader, loss_function, optimizer, scheduler=N
                 reference = reference.to(train_config.device)
 
                 # Forward pass
-                features1, features2, stage3_features1, stage3_features2 = model(grd_img=query, aerial_img=reference)
+                features1, features2 = model(grd_img=query, aerial_img=reference)
                 # Adding OT module
                 # ot_features1 = cvft_module(features1, features2, torch.eye(features1.size(0)).to(train_config.device))[0]
                 if torch.cuda.device_count() > 1 and len(train_config.gpu_ids) > 1: 
-                    infonce_loss = loss_function(features1, features2, model.base_model.logit_scale.exp())
+                    infonce_loss = loss_function(features1, features2, model.logit_scale.exp())
                     # ot_loss, _ = cvft_module(features1, features2, torch.eye(features1.size(0)).to(train_config.device))
                 else:
-                    infonce_loss = loss_function(features1, features2, model.base_model.logit_scale.exp()) 
+                    infonce_loss = loss_function(features1, features2, model.logit_scale.exp()) 
                     # ot_loss, _ = cvft_module(features1, features2, torch.eye(features1.size(0)).to(train_config.device))
                 losses.update(infonce_loss.item())
             loss = infonce_loss.float()
@@ -167,4 +167,4 @@ def predict(train_config, model, dataloader):
     if train_config.verbose:
         bar.close()
         
-    return img_features, ids_list, query_features_stage3_list
+    return img_features, ids_list

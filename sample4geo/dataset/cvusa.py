@@ -30,7 +30,7 @@ class CVUSADatasetTrain(Dataset):
         self.transforms_query = transforms_query           # ground
         self.transforms_reference = transforms_reference   # satellite
         
-        self.df = pd.read_csv(f'{data_folder}/splits/train-19zl.csv', header=None)
+        self.df = pd.read_csv(f'{data_folder}/splits/train-19zl.csv', header=None) # for debug runs with smaller dataset
         
         self.df = self.df.rename(columns={0: "sat", 1: "ground", 2: "ground_anno"})
         
@@ -276,10 +276,10 @@ class CVUSADatasetEval(Dataset):
         # crop positions while keeping them consistent across the whole dataset.
         self.fov_phase_seed = fov_phase_seed
         if split == 'train':
-            self.df = pd.read_csv(f'{data_folder}/splits/train-19zl.csv', header=None)
+            self.df = pd.read_csv(f'{data_folder}/splits/train-19zl.csv', header=None) # for debug runs with smaller dataset
         else:
             if fov_90:
-                self.df = pd.read_csv(f'{data_folder}/splits/val-19zl-cropped.csv', header=None)
+                self.df = pd.read_csv(f'{data_folder}/splits/val-19zl-cropped-one-to-one.csv', header=None)
             else:
                 self.df = pd.read_csv(f'{data_folder}/splits/val-19zl.csv', header=None)
         

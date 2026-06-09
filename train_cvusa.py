@@ -59,8 +59,8 @@ class Configuration:
     label_smoothing: float = 0.1
     
     # Learning Rate
-    lr: float = 0.001                  # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
-    scheduler: str = "cosine"          # "polynomial" | "cosine" | "constant" | None
+    lr: float = 0.0005                  # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
+    scheduler: str = "constant"          # "polynomial" | "cosine" | "constant" | None
     warmup_epochs: int = 1
     lr_end: float = 0.0001             #  only for "polynomial"
     
@@ -78,7 +78,7 @@ class Configuration:
     zero_shot: bool = False 
     
     # Checkpoint to start from
-    checkpoint_start = "cvusa/convnext_base.fb_in22k_ft_in1k_384/weights_e40_98.6830.pth"   
+    checkpoint_start = "cvusa/w-dist_finetuning_weightsfor360_for90FoV/convnext_base.fb_in22k_ft_in1k_384/173347/weights_e8_34.8115.pth"   
   
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
