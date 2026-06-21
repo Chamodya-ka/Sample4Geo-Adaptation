@@ -33,7 +33,7 @@ def get_transforms_train(
 
     satellite_transforms = A.Compose(
         [
-            A.ImageCompression(quality_lower=90, quality_upper=100, p=0.5),
+            A.ImageCompression(quality_range=(80,100), p=0.5),
             A.Resize(
                 image_size_sat[0],
                 image_size_sat[1],
@@ -41,11 +41,10 @@ def get_transforms_train(
                 p=1.0,
             ),
             A.ColorJitter(
-                brightness=0.15,
-                contrast=0.15,
-                saturation=0.15,
-                hue=0.15,
-                always_apply=False,
+                brightness_range=(0.85, 1.15),
+                contrast_range=(0.85, 1.15),
+                saturation_range=(0.85, 1.15),
+                hue_range=(-0.15, 0.15),
                 p=0.5,
             ),
             A.OneOf(
@@ -59,13 +58,10 @@ def get_transforms_train(
                 [
                     A.GridDropout(ratio=0.4, p=1.0),
                     A.CoarseDropout(
-                        max_holes=25,
-                        max_height=int(0.2 * image_size_sat[0]),
-                        max_width=int(0.2 * image_size_sat[0]),
-                        min_holes=10,
-                        min_height=int(0.1 * image_size_sat[0]),
-                        min_width=int(0.1 * image_size_sat[0]),
-                        p=1.0,
+                        num_holes_range=(10,25),
+                        hole_height_range=(int(0.1 * image_size_sat[0]), int(0.2 * image_size_sat[0])),
+                        hole_width_range=(int(0.1 * image_size_sat[0]), int(0.2 * image_size_sat[0])),
+                        p=0.85,
                     ),
                 ],
                 p=0.3,
@@ -78,7 +74,7 @@ def get_transforms_train(
     ground_transforms = A.Compose(
         [
             Cut(cutting=ground_cutting, p=1.0),
-            A.ImageCompression(quality_lower=90, quality_upper=100, p=0.5),
+            A.ImageCompression(quality_range=(80,100), p=0.5),
             A.Resize(
                 img_size_ground[0],
                 img_size_ground[1],
@@ -86,11 +82,10 @@ def get_transforms_train(
                 p=1.0,
             ),
             A.ColorJitter(
-                brightness=0.15,
-                contrast=0.15,
-                saturation=0.15,
-                hue=0.15,
-                always_apply=False,
+                brightness_range=(0.85, 1.15),
+                contrast_range=(0.85, 1.15),
+                saturation_range=(0.85, 1.15),
+                hue_range=(-0.15, 0.15),
                 p=0.5,
             ),
             A.OneOf(
@@ -104,13 +99,10 @@ def get_transforms_train(
                 [
                     A.GridDropout(ratio=0.5, p=1.0),
                     A.CoarseDropout(
-                        max_holes=25,
-                        max_height=int(0.2 * img_size_ground[0]),
-                        max_width=int(0.2 * img_size_ground[0]),
-                        min_holes=10,
-                        min_height=int(0.1 * img_size_ground[0]),
-                        min_width=int(0.1 * img_size_ground[0]),
-                        p=1.0,
+                        num_holes_range=(10,25),
+                        hole_height_range=(int(0.1 * image_size_sat[0]), int(0.2 * image_size_sat[0])),
+                        hole_width_range=(int(0.1 * image_size_sat[0]), int(0.2 * image_size_sat[0])),
+                        p=0.85,
                     ),
                 ],
                 p=0.3,

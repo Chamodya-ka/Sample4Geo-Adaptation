@@ -19,6 +19,7 @@ class CVUSADatasetTrain(Dataset):
                  shuffle_batch_size=128,
                  fov_phase_seed=1,
                  fov_90=False,
+                 use_depth_aux=False
                  ):
         
         super().__init__()
@@ -29,11 +30,13 @@ class CVUSADatasetTrain(Dataset):
         self.shuffle_batch_size = shuffle_batch_size
         self.transforms_query = transforms_query           # ground
         self.transforms_reference = transforms_reference   # satellite
+        self.use_depth_aux = use_depth_aux
         
-        self.df = pd.read_csv(f'{data_folder}/splits/train-19zl.csv', header=None) # for debug runs with smaller dataset
+        self.df = pd.read_csv(f'{data_folder}/splits/train-19zl{"" if not use_depth_aux else "-depth"}.csv', header=None) # for debug runs with smaller dataset
         
         self.df = self.df.rename(columns={0: "sat", 1: "ground", 2: "ground_anno"})
-        
+        if use_depth_aux:
+            self.df = self.df.rename(columns={3: "depth"})
         self.df["idx"] = self.df.sat.map(lambda x : int(x.split("/")[-1].split(".")[0]))
         
 
@@ -41,6 +44,8 @@ class CVUSADatasetTrain(Dataset):
         self.idx2ground = dict(zip(self.df.idx, self.df.ground))
    
         self.pairs = list(zip(self.df.idx, self.df.sat, self.df.ground))
+        if use_depth_aux:
+            self.pairs = list(zip(self.df.idx, self.df.sat, self.df.ground, self.df.depth))
         self.fov_90 = fov_90
         self.fov_phase_seed = fov_phase_seed
         self.idx2pair = dict()
@@ -65,7 +70,10 @@ class CVUSADatasetTrain(Dataset):
 
     def __getitem__(self, index):
 
-        idx, sat, ground = self.idx2pair[self.samples[index]]
+        if self.use_depth_aux:
+            idx, sat, ground, depth = self.idx2pair[self.samples[index]]
+        else:
+            idx, sat, ground = self.idx2pair[self.samples[index]]
         
         # load query -> ground image
         query_img = cv2.imread(f'{self.data_folder}/{ground}')
@@ -74,6 +82,12 @@ class CVUSADatasetTrain(Dataset):
         # load reference -> satellite image
         reference_img = cv2.imread(f'{self.data_folder}/{sat}')
         reference_img = cv2.cvtColor(reference_img, cv2.COLOR_BGR2RGB)
+
+        if self.use_depth_aux:
+            depth_map = cv2.imread(f'{self.data_folder}/{depth}', cv2.IMREAD_GRAYSCALE)  # Load depth map as grayscale
+            depth_map = depth_map.astype(np.float32) / 255.0  # Normalize to [0, 1]
+
+        
 
         # Deterministic 90-degree FoV crop.
         # Must happen BEFORE the flip so that the crop region on the original
@@ -86,6 +100,10 @@ class CVUSADatasetTrain(Dataset):
             rng = np.random.default_rng(self.fov_phase_seed * 100003 + idx)
             start = int(rng.integers(0, w - crop_w + 1))
             query_img = query_img[:, start:start + crop_w, :]
+            if self.use_depth_aux:
+                # do similar crop of depth map
+                depth_map = depth_map[:, start:start + crop_w]
+
             # print(f"[TRAIN]  idx={idx:6d}  fov_phase_seed={self.fov_phase_seed}  start={start}")
 
         # Flip simultaneously query and reference (after crop so the crop
@@ -130,10 +148,8 @@ class CVUSADatasetTrain(Dataset):
         unnormalized_query = (query_img * inv_std) + inv_mean
         unnormalized_reference = (reference_img * inv_std) + inv_mean
 
-        if index < 10:
-            cv2.imwrite(f"./debug/{index}_train_query.jpg", cv2.cvtColor(unnormalized_query.permute(1, 2, 0).numpy() * 255, cv2.COLOR_RGB2BGR))
-            cv2.imwrite(f"./debug/{index}_train_reference.jpg", cv2.cvtColor(unnormalized_reference.permute(1, 2, 0).numpy() * 255, cv2.COLOR_RGB2BGR)) 
-
+        if self.use_depth_aux:
+            return query_img, reference_img, depth_map, label
         return query_img, reference_img, label
     
     def __len__(self):

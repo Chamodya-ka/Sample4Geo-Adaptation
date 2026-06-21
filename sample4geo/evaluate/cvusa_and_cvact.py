@@ -17,9 +17,9 @@ def evaluate(config,
     
     
     print("\nExtract Features:")
-    reference_features, reference_labels = predict(config, model, reference_dataloader) 
-    query_features, query_labels = predict(config, model, query_dataloader)
-    
+    query_features, query_labels = predict(config, model, query_dataloader, is_query=True)
+    reference_features, reference_labels = predict(config, model, reference_dataloader, is_query=False)
+
     print("Compute Scores:")
     r1 =  calculate_scores(query_features, reference_features, query_labels, reference_labels, step_size=step_size, ranks=ranks) 
         
@@ -41,9 +41,9 @@ def calc_sim(config,
     
     
     print("\nExtract Features:")
-    reference_features, reference_labels = predict(config, model, reference_dataloader) 
-    query_features, query_labels = predict(config, model, query_dataloader)
-    
+    query_features, query_labels = predict(config, model, query_dataloader, is_query=True)
+    reference_features, reference_labels = predict(config, model, reference_dataloader, is_query=False)
+
     print("Compute Scores Train:")
     r1 =  calculate_scores(query_features, reference_features, query_labels, reference_labels, step_size=step_size, ranks=ranks) 
     

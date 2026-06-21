@@ -13,10 +13,10 @@ from transformers import get_constant_schedule_with_warmup, get_polynomial_decay
 from sample4geo.dataset.cvusa import CVUSADatasetEval, CVUSADatasetTrain
 from sample4geo.transforms import get_transforms_train, get_transforms_val
 from sample4geo.utils import setup_system, Logger
-from sample4geo.trainer import train
+from sample4geo.trainer_depth_map import train
 from sample4geo.evaluate.cvusa_and_cvact import evaluate, calc_sim
 from sample4geo.loss import InfoNCE
-from sample4geo.model import TimmModel
+from sample4geo.two_branch_with_depth_learning import TimmModel
 
 
 @dataclass
@@ -28,6 +28,10 @@ class Configuration:
     # Override model image size
     img_size: int = 384
     
+    # use depth auxiliary
+    use_depth_aux: bool = True
+    grad_loss_weight: float = 0.8
+    depth_loss_weight: float = 0.8
     # Training 
     mixed_precision: bool = True
     seed = 42
@@ -47,7 +51,7 @@ class Configuration:
  
     # Eval
     batch_size_eval: int = 128
-    eval_every_n_epoch: int = 4        # eval every n Epoch
+    eval_every_n_epoch: int = 1        # eval every n Epoch
     normalize_features: bool = True
 
     # Optimizer 
@@ -59,8 +63,9 @@ class Configuration:
     label_smoothing: float = 0.1
     
     # Learning Rate
-    lr: float = 0.0005                  # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
-    scheduler: str = "constant"          # "polynomial" | "cosine" | "constant" | None
+    lr: float = 0.001                  # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
+    lr_depth_head=0.01
+    scheduler: str = "cosine"          # "polynomial" | "cosine" | "constant" | None
     warmup_epochs: int = 1
     lr_end: float = 0.0001             #  only for "polynomial"
     
@@ -72,13 +77,13 @@ class Configuration:
     prob_flip: float = 0.5             # flipping the sat image and ground images simultaneously
     
     # Savepath for model checkpoints
-    model_path: str = "cvusa/w-dist_finetuning_weightsfor360_for90FoV"
+    model_path: str = "cvusa/up_dir_spatialCNN_onGroundBranch"
     
     # Eval before training
     zero_shot: bool = False 
     
     # Checkpoint to start from
-    checkpoint_start = "cvusa/w-dist_finetuning_weightsfor360_for90FoV/convnext_base.fb_in22k_ft_in1k_384/173347/weights_e8_34.8115.pth"   
+    checkpoint_start = "/home/71/25021871/Workspace/Sample4Geo-Adaptation/cvusa/convnext_base.fb_in22k_ft_in1k_384/weights_e40_98.6830.pth"   
   
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
@@ -127,7 +132,8 @@ if __name__ == '__main__':
 
     model = TimmModel(config.model,
                       pretrained=True,
-                      img_size=config.img_size)
+                      img_size=config.img_size,
+                      use_depth_aux=config.use_depth_aux)
                           
     data_config = model.get_config()
     print(data_config)
@@ -149,7 +155,8 @@ if __name__ == '__main__':
     if config.checkpoint_start is not None:  
         print("Start from:", config.checkpoint_start)
         model_state_dict = torch.load(config.checkpoint_start)  
-        model.load_state_dict(model_state_dict, strict=False)     
+        model.aer_branch.load_state_dict(model_state_dict, strict=False)     
+        model.grd_branch.load_state_dict(model_state_dict, strict=False)     
 
     # Data parallel
     print("GPUs available:", torch.cuda.device_count())  
@@ -186,6 +193,7 @@ if __name__ == '__main__':
                                       shuffle_batch_size=config.batch_size,
                                       fov_90=True,
                                       fov_phase_seed=1,
+                                      use_depth_aux=config.use_depth_aux
                                       )
     
     
@@ -314,7 +322,7 @@ if __name__ == '__main__':
     #-----------------------------------------------------------------------------#
 
     if config.decay_exclue_bias:
-        param_optimizer = list(model.named_parameters())
+        # param_optimizer = list(model.aer_branch())
         no_decay = ["bias", "LayerNorm.bias"]
         optimizer_parameters = [
             {
@@ -324,11 +332,15 @@ if __name__ == '__main__':
             {
                 "params": [p for n, p in param_optimizer if any(nd in n for nd in no_decay)],
                 "weight_decay": 0.0,
-            },
+            }
         ]
         optimizer = torch.optim.AdamW(optimizer_parameters, lr=config.lr)
     else:
-        optimizer = torch.optim.AdamW(model.parameters(), lr=config.lr)
+        optimizer = torch.optim.AdamW([
+                {"params": model.aer_branch.parameters(), "lr": config.lr},
+                {"params": model.grd_branch.parameters(), "lr": config.lr},
+                {"params": model.depth_head.parameters(), "lr": config.lr_depth_head}
+            ])
 
 
     #-----------------------------------------------------------------------------#
@@ -419,7 +431,9 @@ if __name__ == '__main__':
                            loss_function=loss_function,
                            optimizer=optimizer,
                            scheduler=scheduler,
-                           scaler=scaler)
+                           scaler=scaler,
+                           use_depth_aux=config.use_depth_aux,
+                           )
         
         print("Epoch: {}, Train Loss = {:.3f}, Lr = {:.6f}".format(epoch,
                                                                    train_loss,

@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from sample4geo.dataset.cvusa import CVUSADatasetEval
 from sample4geo.transforms import get_transforms_val
 from sample4geo.evaluate.cvusa_and_cvact import evaluate
-from sample4geo.model import TimmModel
+from sample4geo.two_branch_with_depth_learning import TimmModel
 
 
 @dataclass
